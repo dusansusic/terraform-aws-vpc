@@ -1,3 +1,11 @@
+variable "vpc_id" {
+  description = "Pass existing VPC ID in order to create resource in it"
+}
+
+variable "igw_id" {
+  description = "Pass existing IGW ID in order to avoid all changes in routing tables and re-attach to existing VPC"
+}
+
 variable "create_vpc" {
   description = "Controls if VPC should be created (it affects almost all resources)"
   type        = bool

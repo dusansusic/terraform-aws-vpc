@@ -8,14 +8,8 @@ locals {
   nat_gateway_count = var.single_nat_gateway ? 1 : var.one_nat_gateway_per_az ? length(var.azs) : local.max_subnet_length
 
   # Use `local.vpc_id` to give a hint to Terraform that subnets should be deleted before secondary CIDR blocks can be free!
-  vpc_id = element(
-    concat(
-      aws_vpc_ipv4_cidr_block_association.this.*.vpc_id,
-      aws_vpc.this.*.id,
-      [""],
-    ),
-    0,
-  )
+  vpc_id = var.vpc_id
+  igw_id = var.igw_id
 
   vpce_tags = merge(
     var.tags,
@@ -27,7 +21,7 @@ locals {
 # VPC
 ######
 resource "aws_vpc" "this" {
-  count = var.create_vpc ? 1 : 0
+  count = 0
 
   cidr_block                       = var.cidr
   instance_tenancy                 = var.instance_tenancy
@@ -49,7 +43,7 @@ resource "aws_vpc" "this" {
 resource "aws_vpc_ipv4_cidr_block_association" "this" {
   count = var.create_vpc && length(var.secondary_cidr_blocks) > 0 ? length(var.secondary_cidr_blocks) : 0
 
-  vpc_id = aws_vpc.this[0].id
+  vpc_id = local.vpc_id
 
   cidr_block = element(var.secondary_cidr_blocks, count.index)
 }
@@ -89,7 +83,7 @@ resource "aws_vpc_dhcp_options_association" "this" {
 # Internet Gateway
 ###################
 resource "aws_internet_gateway" "this" {
-  count = var.create_vpc && length(var.public_subnets) > 0 ? 1 : 0
+  count = 0
 
   vpc_id = local.vpc_id
 
@@ -130,7 +124,7 @@ resource "aws_route" "public_internet_gateway" {
 
   route_table_id         = aws_route_table.public[0].id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.this[0].id
+  gateway_id             = local.igw_id
 
   timeouts {
     create = "5m"
@@ -142,7 +136,7 @@ resource "aws_route" "public_internet_gateway_ipv6" {
 
   route_table_id              = aws_route_table.public[0].id
   destination_ipv6_cidr_block = "::/0"
-  gateway_id                  = aws_internet_gateway.this[0].id
+  gateway_id                  = local.igw_id
 }
 
 #################
@@ -195,7 +189,7 @@ resource "aws_route" "database_internet_gateway" {
 
   route_table_id         = aws_route_table.database[0].id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.this[0].id
+  gateway_id             = local.igw_id
 
   timeouts {
     create = "5m"
@@ -530,7 +524,7 @@ resource "aws_default_network_acl" "this" {
 resource "aws_network_acl" "public" {
   count = var.create_vpc && var.public_dedicated_network_acl && length(var.public_subnets) > 0 ? 1 : 0
 
-  vpc_id     = element(concat(aws_vpc.this.*.id, [""]), 0)
+  vpc_id     = local.vpc_id
   subnet_ids = aws_subnet.public.*.id
 
   tags = merge(
@@ -582,7 +576,7 @@ resource "aws_network_acl_rule" "public_outbound" {
 resource "aws_network_acl" "private" {
   count = var.create_vpc && var.private_dedicated_network_acl && length(var.private_subnets) > 0 ? 1 : 0
 
-  vpc_id     = element(concat(aws_vpc.this.*.id, [""]), 0)
+  vpc_id     = local.vpc_id
   subnet_ids = aws_subnet.private.*.id
 
   tags = merge(
@@ -634,7 +628,7 @@ resource "aws_network_acl_rule" "private_outbound" {
 resource "aws_network_acl" "intra" {
   count = var.create_vpc && var.intra_dedicated_network_acl && length(var.intra_subnets) > 0 ? 1 : 0
 
-  vpc_id     = element(concat(aws_vpc.this.*.id, [""]), 0)
+  vpc_id     = local.vpc_id
   subnet_ids = aws_subnet.intra.*.id
 
   tags = merge(
@@ -686,7 +680,7 @@ resource "aws_network_acl_rule" "intra_outbound" {
 resource "aws_network_acl" "database" {
   count = var.create_vpc && var.database_dedicated_network_acl && length(var.database_subnets) > 0 ? 1 : 0
 
-  vpc_id     = element(concat(aws_vpc.this.*.id, [""]), 0)
+  vpc_id     = local.vpc_id
   subnet_ids = aws_subnet.database.*.id
 
   tags = merge(
@@ -738,7 +732,7 @@ resource "aws_network_acl_rule" "database_outbound" {
 resource "aws_network_acl" "redshift" {
   count = var.create_vpc && var.redshift_dedicated_network_acl && length(var.redshift_subnets) > 0 ? 1 : 0
 
-  vpc_id     = element(concat(aws_vpc.this.*.id, [""]), 0)
+  vpc_id     = local.vpc_id
   subnet_ids = aws_subnet.redshift.*.id
 
   tags = merge(
@@ -790,7 +784,7 @@ resource "aws_network_acl_rule" "redshift_outbound" {
 resource "aws_network_acl" "elasticache" {
   count = var.create_vpc && var.elasticache_dedicated_network_acl && length(var.elasticache_subnets) > 0 ? 1 : 0
 
-  vpc_id     = element(concat(aws_vpc.this.*.id, [""]), 0)
+  vpc_id     = local.vpc_id
   subnet_ids = aws_subnet.elasticache.*.id
 
   tags = merge(
@@ -896,7 +890,7 @@ resource "aws_nat_gateway" "this" {
     var.nat_gateway_tags,
   )
 
-  depends_on = [aws_internet_gateway.this]
+  depends_on = [var.igw_id]
 }
 
 resource "aws_route" "private_nat_gateway" {
