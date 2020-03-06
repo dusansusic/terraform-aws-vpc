@@ -21,7 +21,7 @@ locals {
 # VPC
 ######
 resource "aws_vpc" "this" {
-#   count = 0
+  count = 1
 
   cidr_block                       = var.cidr
   instance_tenancy                 = var.instance_tenancy
@@ -83,7 +83,7 @@ resource "aws_vpc_dhcp_options_association" "this" {
 # Internet Gateway
 ###################
 resource "aws_internet_gateway" "this" {
-#   count = 0
+  count = 1
 
   vpc_id = local.vpc_id
 
